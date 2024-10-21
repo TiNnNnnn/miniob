@@ -20,7 +20,7 @@ See the Mulan PSL v2 for more details. */
 
 RC SqlTaskHandler::handle_event(Communicator *communicator)
 {
-  SessionEventevent = nullptr;
+  SessionEvent *event = nullptr;
   RC rc = communicator->read_event(event);
   if (OB_FAIL(rc)) {
     return rc;
