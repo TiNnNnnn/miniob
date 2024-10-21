@@ -28,6 +28,8 @@ Value::Value(bool val) { set_boolean(val); }
 
 Value::Value(const char *s, int len /*= 0*/) { set_string(s, len); }
 
+Value::Value(const float* x,int dim){ set_vector(x,dim); }
+
 Value::Value(const Value &other)
 {
   this->attr_type_ = other.attr_type_;
@@ -37,7 +39,9 @@ Value::Value(const Value &other)
     case AttrType::CHARS: {
       set_string_from_other(other);
     } break;
-
+    case AttrType::VECTOR:{
+      set_vector_from_other(other);
+    }break;
     default: {
       this->value_ = other.value_;
     } break;
@@ -67,6 +71,9 @@ Value &Value::operator=(const Value &other)
     case AttrType::CHARS: {
       set_string_from_other(other);
     } break;
+    case AttrType::VECTOR:{
+      set_vector_from_other(other);
+    }break;
 
     default: {
       this->value_ = other.value_;
@@ -97,11 +104,14 @@ void Value::reset()
       if (own_data_ && value_.pointer_value_ != nullptr) {
         delete[] value_.pointer_value_;
         value_.pointer_value_ = nullptr;
-      }
-      break;
+      }break;
+    case AttrType::VECTOR:
+      if(own_data_ && value_.pointer_value_ != nullptr) {
+        delete[] value_.pointer_vector_;
+        value_.pointer_vector_ = nullptr;
+      }break;
     default: break;
   }
-
   attr_type_ = AttrType::UNDEFINED;
   length_    = 0;
   own_data_  = false;
@@ -124,6 +134,25 @@ void Value::set_data(char *data, int length)
     case AttrType::BOOLEANS: {
       value_.bool_value_ = *(int *)data != 0;
       length_            = length;
+    } break;
+    case AttrType::DATE:{
+      //DATE类型直接按照string存储
+      reset();
+      this->set_type(AttrType::DATE);
+      if (data == nullptr) {
+        value_.pointer_value_ = nullptr;
+        length_               = 0;
+      } else {
+        own_data_ = true;
+        int len = strlen(data);
+        value_.pointer_value_ = new char[len + 1];
+        length_               = len;
+        memcpy(value_.pointer_value_, data, len);
+        value_.pointer_value_[len] = '\0';
+      }
+    } break;
+    case AttrType::VECTOR:{
+      LOG_WARN("unsupport data type: %d", attr_type_);
     } break;
     default: {
       LOG_WARN("unknown data type: %d", attr_type_);
@@ -175,6 +204,41 @@ void Value::set_string(const char *s, int len /*= 0*/)
   }
 }
 
+void Value::set_vector(const float *s,int len)
+{
+    reset();
+    attr_type_ = AttrType::VECTOR;
+    if(s == nullptr){
+      value_.pointer_vector_ = nullptr;
+      length_ = 0;
+    }else{
+       value_.pointer_vector_= new float[len];
+       length_ = len;
+       memcpy(value_.pointer_vector_,s,len);
+    }   
+}
+
+void Value::set_date(const char *s,int len)
+{
+  reset();
+  attr_type_ = AttrType::DATE;
+    if (s == nullptr) {
+    value_.pointer_value_ = nullptr;
+    length_               = 0;
+  } else {
+    own_data_ = true;
+    if (len > 0) {
+      len = strnlen(s, len);
+    } else {
+      len = strlen(s);
+    }
+    value_.pointer_value_ = new char[len + 1];
+    length_               = len;
+    memcpy(value_.pointer_value_, s, len);
+    value_.pointer_value_[len] = '\0';
+  }
+}
+
 void Value::set_value(const Value &value)
 {
   switch (value.attr_type_) {
@@ -190,6 +254,12 @@ void Value::set_value(const Value &value)
     case AttrType::BOOLEANS: {
       set_boolean(value.get_boolean());
     } break;
+    case AttrType::DATE: {
+      set_string(value.get_string().c_str());
+    } break;
+    case AttrType::VECTOR:{
+      set_vector(value.get_vector(),value.length());
+    }
     default: {
       ASSERT(false, "got an invalid value type");
     } break;
@@ -206,12 +276,25 @@ void Value::set_string_from_other(const Value &other)
   }
 }
 
+void Value::set_vector_from_other(const Value &other)
+{
+  ASSERT(attr_type_ == AttrType::VECTOR, "attr type is not VECTOR");
+  if (own_data_ && other.value_.pointer_vector_ != nullptr && length_ != 0) {
+    this->value_.pointer_vector_ = new float[this->length_];
+    memcpy(this->value_.pointer_vector_, other.value_.pointer_vector_, this->length_);
+  }
+}
+
 const char *Value::data() const
 {
   switch (attr_type_) {
-    case AttrType::CHARS: {
+    case AttrType::CHARS:
+    case AttrType::DATE: {
       return value_.pointer_value_;
     } break;
+    case AttrType::VECTOR:{
+      return (const char*) value_.pointer_vector_;
+    }
     default: {
       return (const char *)&value_;
     } break;
@@ -288,6 +371,19 @@ float Value::get_float() const
 }
 
 string Value::get_string() const { return this->to_string(); }
+
+
+float* Value::get_vector() const {
+  switch(attr_type_){
+    case AttrType::VECTOR:{
+      return value_.pointer_vector_;
+    }break;
+    default: {
+      LOG_WARN("unsupport data type. type=%d", attr_type_);
+      return 0;
+    }
+  }
+}
 
 bool Value::get_boolean() const
 {

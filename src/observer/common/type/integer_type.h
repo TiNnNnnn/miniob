@@ -32,4 +32,11 @@ public:
   RC set_value_from_str(Value &val, const string &data) const override;
 
   RC to_string(const Value &val, string &result) const override;
+
+  RC cast_to(const Value &val, AttrType type, Value &result) const override;
+
+   /**
+   * @brief 计算从 type 到 attr_type 的隐式转换的 cost，如果无法转换，返回 INT32_MAX
+   */
+  int cast_cost(AttrType type) override;
 };

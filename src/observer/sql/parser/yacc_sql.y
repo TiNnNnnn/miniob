@@ -89,6 +89,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         INT_T
         STRING_T
         FLOAT_T
+        DATE_T 
         HELP
         EXIT
         DOT //QUOTE
@@ -111,17 +112,22 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         LE
         GE
         NE
+        LIKE
+        
+
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
   Value *                                    value;
+  Value *                                    value_with_negative;
   enum CompOp                                comp;
   RelAttrSqlNode *                           rel_attr;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
   Expression *                               expression;
+  Expression *                               expression_calc;
   std::vector<std::unique_ptr<Expression>> * expression_list;
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
@@ -130,18 +136,22 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   char *                                     string;
   int                                        number;
   float                                      floats;
+  char *                                     date_string;
 }
 
 %token <number> NUMBER
 %token <floats> FLOAT
 %token <string> ID
 %token <string> SSS
+%token <date_string> DATE
+
 //非终结符
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
 %type <number>              type
 %type <condition>           condition
 %type <value>               value
+%type <value_with_negative> value_with_negative
 %type <number>              number
 %type <string>              relation
 %type <comp>                comp_op
@@ -154,6 +164,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <string>              storage_format
 %type <relation_list>       rel_list
 %type <expression>          expression
+%type <expression_calc>     expression_calc
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
 %type <sql_node>            calc_stmt
@@ -183,6 +194,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %left '+' '-'
 %left '*' '/'
 %nonassoc UMINUS
+//%right UMINUS
 %%
 
 commands: command_wrapper opt_semicolon  //commands or sqls. parser starts here.
@@ -349,9 +361,14 @@ attr_def:
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
-      $$->length = 4;
+
+      if ($$->type == AttrType::DATE){
+        $$->length = 10; //2024-10-18
+      } else {
+        $$->length = 4;
+      }
       free($1);
-    }
+    } 
     ;
 number:
     NUMBER {$$ = $1;}
@@ -360,9 +377,10 @@ type:
     INT_T      { $$ = static_cast<int>(AttrType::INTS); }
     | STRING_T { $$ = static_cast<int>(AttrType::CHARS); }
     | FLOAT_T  { $$ = static_cast<int>(AttrType::FLOATS); }
+    | DATE_T   { $$ = static_cast<int>(AttrType::DATE); }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
-    INSERT INTO ID VALUES LBRACE value value_list RBRACE 
+    INSERT INTO ID VALUES LBRACE value_with_negative value_list RBRACE 
     {
       $$ = new ParsedSqlNode(SCF_INSERT);
       $$->insertion.relation_name = $3;
@@ -382,7 +400,7 @@ value_list:
     {
       $$ = nullptr;
     }
-    | COMMA value value_list  { 
+    | COMMA value_with_negative value_list  { 
       if ($3 != nullptr) {
         $$ = $3;
       } else {
@@ -390,18 +408,43 @@ value_list:
       }
       $$->emplace_back(*$2);
       delete $2;
-    }
+    } 
     ;
-value:
-    NUMBER {
+value_with_negative:
+    NUMBER { //int 
       $$ = new Value((int)$1);
       @$ = @1;
     }
-    |FLOAT {
+    |FLOAT { //int 
       $$ = new Value((float)$1);
       @$ = @1;
     }
-    |SSS {
+    |SSS { //char*
+      char *tmp = common::substr($1,1,strlen($1)-2);
+      $$ = new Value(tmp);
+      free(tmp);
+      free($1);
+    }
+    |'-' NUMBER { //int 
+      $$ = new Value(-(int)$2);
+      @$ = @2;
+    }
+    |'-' FLOAT { //int 
+      $$ = new Value(-(float)$2);
+      @$ = @2;
+    }
+    ;
+
+value:
+    NUMBER { //int 
+      $$ = new Value((int)$1);
+      @$ = @1;
+    }
+    |FLOAT { //int 
+      $$ = new Value((float)$1);
+      @$ = @1;
+    }
+    |SSS { //char*
       char *tmp = common::substr($1,1,strlen($1)-2);
       $$ = new Value(tmp);
       free(tmp);
@@ -432,7 +475,7 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ value where 
+    UPDATE ID SET ID EQ value_with_negative where 
     {
       $$ = new ParsedSqlNode(SCF_UPDATE);
       $$->update.relation_name = $2;
@@ -531,6 +574,29 @@ expression:
       $$ = new StarExpr();
     }
     // your code here
+    ;
+
+expression_calc:
+    expression '+' expression {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1, $3, sql_string, &@$);
+    }
+    | expression '-' expression {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::SUB, $1, $3, sql_string, &@$);
+    }
+    | expression '*' expression {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::MUL, $1, $3, sql_string, &@$);
+    }
+    | expression '/' expression {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::DIV, $1, $3, sql_string, &@$);
+    }
+    | LBRACE expression RBRACE {
+      $$ = $2;
+      $$->set_name(token_name(sql_string, &@$));
+      //$$ = create_arithmetic_expression(ArithmeticExpr::Type::RBRACE, $2, nullptr, sql_string, &@$);
+    }
+    | '-' expression %prec UMINUS {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2, nullptr, sql_string, &@$);
+    }
     ;
 
 rel_attr:
@@ -644,6 +710,99 @@ condition:
 
       delete $1;
       delete $3;
+    }
+    | rel_attr LIKE value  //SELECT * FROM employees WHERE name LIKE 'J%';
+    {
+        $$ = new ConditionSqlNode;
+        $$->left_is_attr = 1;
+        $$->left_attr = *$1;
+        $$->right_is_attr = 0;
+        $$->right_is_like = 1;
+        $$->right_value = *$3;
+        $$->comp = LIKE_OP;
+
+        delete $1;
+        delete $3;
+    }
+    | rel_attr comp_op expression_calc
+    {
+        $$ = new ConditionSqlNode;
+        $$->left_is_attr = 1;
+        $$->left_is_expr = 0;
+        $$->left_attr = *$1;
+
+        $$->right_is_attr = 0;
+        $$->right_is_like = 0;
+        $$->right_is_expr = 1;
+        $$->right_expr = $3;
+        $$->comp = $2;
+
+        delete $1;
+        //delete $3;
+    }
+    | expression_calc comp_op rel_attr 
+    {
+        $$ = new ConditionSqlNode;
+        $$->left_is_attr = 0;
+        $$->left_is_expr = 1;
+        $$->left_expr = $1;
+        
+        $$->right_is_attr = 1;
+        $$->right_is_like = 0;
+        $$->right_is_expr = 0;
+        $$->right_attr = *$3;
+        $$->comp = $2;
+
+        //delete $1;
+        delete $3;
+    }
+    | value comp_op expression_calc
+    {
+        $$ = new ConditionSqlNode;
+        $$->left_is_attr = 0;
+        $$->left_is_expr = 0;
+        $$->left_value = *$1;
+        
+        $$->right_is_attr = 0;
+        $$->right_is_like = 0;
+        $$->right_is_expr = 1;
+        $$->right_expr = $3;
+        $$->comp = $2;
+
+        delete $1;
+        //delete $3;
+    }
+    | expression_calc comp_op value
+    {
+        $$ = new ConditionSqlNode;
+        $$->left_is_attr = 0;
+        $$->left_is_expr = 1;
+        $$->left_expr= $1;
+        
+        $$->right_is_attr = 0;
+        $$->right_is_like = 0;
+        $$->right_is_expr = 0;
+        $$->right_value = *$3;
+        $$->comp = $2;
+
+        //delete $1;
+        delete $3;
+    }
+    |expression_calc comp_op expression_calc
+    {
+
+        $$ = new ConditionSqlNode;
+        $$->left_is_attr = 0;
+        $$->left_is_expr = 1;
+        $$->left_expr = $1;
+        $$->right_is_attr = 0;
+        $$->right_is_like = 0;
+        $$->right_is_expr = 1;
+        $$->right_expr = $3;
+        $$->comp = $2;
+
+        //delete $1;
+        //delete $3;
     }
     ;
 

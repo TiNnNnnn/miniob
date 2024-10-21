@@ -67,7 +67,6 @@ class Expression
 public:
   Expression()          = default;
   virtual ~Expression() = default;
-
   /**
    * @brief 判断两个表达式是否相等
    */
@@ -121,6 +120,7 @@ public:
    * @brief 用于 ComparisonExpr 获得比较结果 `select`。
    */
   virtual RC eval(Chunk &chunk, std::vector<uint8_t> &select) { return RC::UNIMPLEMENTED; }
+
 
 protected:
   /**
@@ -242,6 +242,7 @@ private:
   Value value_;
 };
 
+
 /**
  * @brief 类型转换表达式
  * @ingroup Expression
@@ -305,6 +306,8 @@ public:
    * @param value the result of comparison
    */
   RC compare_value(const Value &left, const Value &right, bool &value) const;
+
+  RC compare_like(const Value &left,const Value &right,bool &value) const;
 
   template <typename T>
   RC compare_column(const Column &left, const Column &right, std::vector<uint8_t> &result) const;

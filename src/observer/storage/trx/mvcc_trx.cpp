@@ -186,15 +186,28 @@ RC MvccTrx::delete_record(Table *table, Record &record)
   return RC::SUCCESS;
 }
 
+
+RC MvccTrx::update_record(Table *table, Record &record, std::string attr_name, Value value){
+    return RC::SUCCESS;
+}
+
 RC MvccTrx::visit_record(Table *table, Record &record, ReadWriteMode mode)
 {
   Field begin_field;
   Field end_field;
   trx_fields(table, begin_field, end_field);
 
-  int32_t begin_xid = begin_field.get_int(record);
-  int32_t end_xid   = end_field.get_int(record);
+  /*
+      begin_xid表示该record的插入事务ID
+        - 如果 begin_xid > 0，表示记录是已经提交的事务插入的
+        - 如果 begin_xid < 0，表示该记录是未提交的事务插入的，负的 begin_xid 的绝对值表示插入该记录的事务ID
 
+      end_xid表示该record被更新/删除的事务ID
+        - 表示记录是由已经提交的事务删除或更新的
+        - 表示该记录是未提交的事务删除或更新的，负的 end_xid 的绝对值表示删除或更新该记录的事务ID
+  */
+  int32_t begin_xid = begin_field.get_int(record); 
+  int32_t end_xid   = end_field.get_int(record); //存储了该记录被哪个事务标记为删除或更新的事务ID (end_xid>0,表示当前事务已经提交，)
   RC rc = RC::SUCCESS;
   if (begin_xid > 0 && end_xid > 0) {
     if (trx_id_ >= begin_xid && trx_id_ <= end_xid) {
@@ -205,7 +218,7 @@ RC MvccTrx::visit_record(Table *table, Record &record, ReadWriteMode mode)
     }
   } else if (begin_xid < 0) {
     // begin xid 小于0说明是刚插入而且没有提交的数据
-    if (-begin_xid == trx_id_) {
+    if (-begin_xid == trx_id_) { //新插入数据对插入事务可见
       rc = RC::SUCCESS;
     } else {
       LOG_TRACE("record invisible. someone is updating this record right now. trx id=%d, begin xid=%d, end xid=%d",
@@ -216,6 +229,7 @@ RC MvccTrx::visit_record(Table *table, Record &record, ReadWriteMode mode)
     // end xid 小于0 说明是正在删除但是还没有提交的数据
     if (mode == ReadWriteMode::READ_ONLY) {
       // 如果 -end_xid 就是当前事务的事务号，说明是当前事务删除的
+      //如果记录的删除操作是由其他事务发起的，则该记录对当前事务可见
       if (-end_xid != trx_id_) {
         rc = RC::SUCCESS;
       } else {
@@ -223,15 +237,15 @@ RC MvccTrx::visit_record(Table *table, Record &record, ReadWriteMode mode)
                   trx_id_, begin_xid, end_xid);
         rc = RC::RECORD_INVISIBLE;
       }
-    } else {
+    } else {//如果当前事务不是只读模式 (READ_WRITE)，即试图修改记录
       // 如果当前想要修改此条数据，并且不是当前事务删除的，简单的报错
       // 这是事务并发处理的一种方式，非常简单粗暴。其它的并发处理方法，可以等待，或者让客户端重试
       // 或者等事务结束后，再检测修改的数据是否有冲突
-      if (-end_xid != trx_id_) {
+      if (-end_xid != trx_id_) { // 如果其他事务正在删除该记录，产生并发冲突，返回锁定冲突的错误
         LOG_TRACE("concurrency conflit. someone is deleting this record right now. trx id=%d, begin xid=%d, end xid=%d",
                   trx_id_, begin_xid, end_xid);
         rc = RC::LOCKED_CONCURRENCY_CONFLICT;
-      } else {
+      } else {// 如果是当前事务删除的记录，则记录不可见
         LOG_TRACE("record invisible. self has deleted this record. trx id=%d, begin xid=%d, end xid=%d",
                   trx_id_, begin_xid, end_xid);
         rc = RC::RECORD_INVISIBLE;

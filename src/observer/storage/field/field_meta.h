@@ -49,7 +49,6 @@ public:
 public:
   void      to_json(Json::Value &json_value) const;
   static RC from_json(const Json::Value &json_value, FieldMeta &field);
-
 protected:
   string   name_;
   AttrType attr_type_;

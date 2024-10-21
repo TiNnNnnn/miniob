@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/string.h"
 #include "sql/parser/expression_binder.h"
 #include "sql/expr/expression_iterator.h"
+#include "sql/expr/expression.h"
 
 using namespace std;
 using namespace common;
@@ -336,6 +337,12 @@ RC ExpressionBinder::bind_arithmetic_expression(
     left_expr.reset(left.release());
   }
 
+  if(arithmetic_expr->arithmetic_type() == ArithmeticExpr::Type::NEGATIVE){
+      // arithmetic's right is nullptr
+      bound_expressions.emplace_back(std::move(expr));
+      return RC::SUCCESS;
+  }
+
   child_bound_expressions.clear();
   rc = bind_expression(right_expr, child_bound_expressions);
   if (OB_FAIL(rc)) {
@@ -346,6 +353,7 @@ RC ExpressionBinder::bind_arithmetic_expression(
     LOG_WARN("invalid right children number of comparison expression: %d", child_bound_expressions.size());
     return RC::INVALID_ARGUMENT;
   }
+
 
   unique_ptr<Expression> &right = child_bound_expressions[0];
   if (right.get() != right_expr.get()) {

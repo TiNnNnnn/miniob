@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/expression.h"
 #include "sql/expr/tuple.h"
 #include "sql/expr/arithmetic_operator.hpp"
+#include <regex>
 
 using namespace std;
 
@@ -121,7 +122,10 @@ ComparisonExpr::~ComparisonExpr() {}
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
   RC  rc         = RC::SUCCESS;
-  int cmp_result = left.compare(right);
+  int cmp_result = 0;
+  if(comp_ != CompOp::LIKE_OP)
+    cmp_result = left.compare(right);
+
   result         = false;
   switch (comp_) {
     case EQUAL_TO: {
@@ -142,6 +146,9 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
     case GREAT_THAN: {
       result = (cmp_result > 0);
     } break;
+    case LIKE_OP: {
+      compare_like(left,right,result);
+    }break;
     default: {
       LOG_WARN("unsupported comparison. %d", comp_);
       rc = RC::INTERNAL;
@@ -149,6 +156,40 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
   }
 
   return rc;
+}
+
+RC ComparisonExpr::compare_like(const Value &left,const Value &right,bool &value) const
+{
+    //todo:目前like匹配只支持char类型
+    if(right.attr_type() != AttrType::CHARS){
+      return RC::UNSUPPORTED;
+    }
+    std::string left_str = left.to_string();
+    std::string right_str = right.to_string();
+
+    // 处理 right_str 中的 % 和 _ 通配符，将其转换为正则表达式
+    // % -> .*  匹配任意长度的字符串
+    // _ -> .   匹配单个任意字符
+
+    std::string regex_pattern;
+    for (char ch : right_str) {
+        if (ch == '%') {
+            regex_pattern += ".*";  // % 代表任意长度的字符
+        } else if (ch == '_') {
+            regex_pattern += ".";   // _ 代表任意单个字符
+        } else {
+            regex_pattern += std::regex_replace(std::string(1, ch), std::regex(R"([.^$|()\[\]{}*+?\\])"), R"(\\$&)"); // 转义正则表达式中的特殊字符
+        }
+    }
+
+    // 添加正则表达式的起始和结束锚点
+    regex_pattern = "^" + regex_pattern + "$";
+
+    // 使用 regex_match 检查是否匹配
+    std::regex like_regex(regex_pattern);
+    value = std::regex_match(left_str, like_regex);
+
+    return RC::SUCCESS;
 }
 
 RC ComparisonExpr::try_get_value(Value &cell) const
@@ -179,11 +220,19 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
 
   RC rc = left_->get_value(tuple, left_value);
   if (rc != RC::SUCCESS) {
+    if(rc == RC::DIVIDE_ZERO){
+      value.set_boolean(false);
+      return RC::SUCCESS;
+    }
     LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
     return rc;
   }
   rc = right_->get_value(tuple, right_value);
   if (rc != RC::SUCCESS) {
+    if(rc == RC::DIVIDE_ZERO){
+      value.set_boolean(false);
+      return RC::SUCCESS;
+    }
     LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
     return rc;
   }
@@ -303,7 +352,7 @@ bool ArithmeticExpr::equal(const Expression &other) const
 }
 AttrType ArithmeticExpr::value_type() const
 {
-  if (!right_) {
+  if (!right_) {                         
     return left_->value_type();
   }
 
@@ -336,6 +385,10 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
     } break;
 
     case Type::DIV: {
+      if(right_value.attr_type() == AttrType::INTS && right_value.get_int() == 0){
+        rc = RC::DIVIDE_ZERO;
+        break;
+      }
       Value::divide(left_value, right_value, value);
     } break;
 
@@ -431,10 +484,19 @@ RC ArithmeticExpr::get_value(const Tuple &tuple, Value &value) const
     LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
     return rc;
   }
-  rc = right_->get_value(tuple, right_value);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
-    return rc;
+
+  if(right_ == nullptr){ //for negative opr
+      if(arithmetic_type_ == Type::NEGATIVE){
+      }else{
+          LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+          return rc;
+      }
+  }else{
+    rc = right_->get_value(tuple, right_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+      return rc;
+    }
   }
   return calc_value(left_value, right_value, value);
 }

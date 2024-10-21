@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/rc.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include "sql/parser/expression_binder.h"
 
 FilterStmt::~FilterStmt()
 {
@@ -74,12 +75,11 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
     table = nullptr;
     return RC::SCHEMA_FIELD_NOT_EXIST;
   }
-
   return RC::SUCCESS;
 }
 
 RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const ConditionSqlNode &condition, FilterUnit *&filter_unit)
+    const ConditionSqlNode& condition, FilterUnit *&filter_unit)
 {
   RC rc = RC::SUCCESS;
 
@@ -89,9 +89,14 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     return RC::INVALID_ARGUMENT;
   }
 
-  filter_unit = new FilterUnit;
 
-  if (condition.left_is_attr) {
+  BinderContext binder_context;
+  for(auto& e : *tables) binder_context.add_table(e.second);
+  ExpressionBinder expression_binder(binder_context);
+
+  filter_unit = new FilterUnit;
+  
+  if (condition.left_is_attr) { //左边是列属性
     Table           *table = nullptr;
     const FieldMeta *field = nullptr;
     rc                     = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);
@@ -103,12 +108,31 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     filter_obj.init_attr(Field(table, field));
     filter_unit->set_left(filter_obj);
   } else {
-    FilterObj filter_obj;
-    filter_obj.init_value(condition.left_value);
-    filter_unit->set_left(filter_obj);
+    if(condition.left_is_expr){ //左边是计算表达式属性
+      std::unique_ptr<Expression>left(condition.left_expr);
+      std::vector<std::unique_ptr<Expression>>bind_lefts;
+      vector<unique_ptr<Expression>> filter_expressions;
+      RC rc = expression_binder.bind_expression(left, bind_lefts);
+      if(bind_lefts.size() != 1){
+        LOG_WARN("cond bind expr must be one");
+        return RC::INTERNAL;
+      }
+      if (OB_FAIL(rc)) {
+          LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+          return rc;
+      }
+      left.swap(bind_lefts[0]);
+      FilterObj filter_obj;
+      filter_obj.init_calc_expr(std::move(left));
+      filter_unit->set_left(filter_obj);
+    }else{
+        FilterObj filter_obj;
+        filter_obj.init_value(condition.left_value);
+        filter_unit->set_left(filter_obj);
+    }
   }
 
-  if (condition.right_is_attr) {
+  if (condition.right_is_attr) { //右边是列属性
     Table           *table = nullptr;
     const FieldMeta *field = nullptr;
     rc                     = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);
@@ -120,13 +144,50 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     filter_obj.init_attr(Field(table, field));
     filter_unit->set_right(filter_obj);
   } else {
-    FilterObj filter_obj;
-    filter_obj.init_value(condition.right_value);
-    filter_unit->set_right(filter_obj);
+    if(condition.right_is_expr){
+
+      std::unique_ptr<Expression>right(condition.right_expr);
+      std::vector<std::unique_ptr<Expression>>bind_rights;
+      vector<unique_ptr<Expression>> filter_expressions;
+      RC rc = expression_binder.bind_expression(right, bind_rights);
+      if(bind_rights.size() != 1){
+        LOG_WARN("cond bind expr must be one");
+        return RC::INTERNAL;
+      }
+      if (OB_FAIL(rc)) {
+          LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+          return rc;
+      }
+      right.swap(bind_rights[0]);
+      FilterObj filter_obj;
+      filter_obj.init_calc_expr(std::move(right));
+      filter_unit->set_right(filter_obj);
+    }else{
+      FilterObj filter_obj;
+      filter_obj.init_like_expr(condition.right_value);
+      filter_unit->set_right(filter_obj);
+    }
   }
-
   filter_unit->set_comp(comp);
-
   // 检查两个类型是否能够比较
   return rc;
 }
+
+
+// RC FilterStmt::create_expr(Expression* e)
+// {
+//   if(e->type() == ExprType::ARITHMETIC){
+//       auto expr = static_cast<ArithmeticExpr*>(e);
+//       auto left_expr = expr->left().get();
+//       auto right_expr = expr->right().get();
+//       create_expr(left_expr);
+//       create_expr(right_expr);
+//   }else if(e->type() == ExprType::UNBOUND_AGGREGATION){
+
+//   }else if(e->type() == ExprType::UNBOUND_FIELD){
+//       auto expr = static_cast<UnboundFieldExpr*>(e);
+//       //e = static_cast<Expression*>(new FieldExpr(expr->table_name(),expr->f))
+
+
+//   }
+// }

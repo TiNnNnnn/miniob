@@ -199,7 +199,7 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
 
   const TupleSchema &schema   = sql_result->tuple_schema();
   const int          cell_num = schema.cell_num();
-
+  //写表头
   for (int i = 0; i < cell_num; i++) {
     const TupleCellSpec &spec  = schema.cell_at(i);
     const char          *alias = spec.alias();
@@ -224,7 +224,7 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
       }
     }
   }
-
+  //如果select有数据，则换行，准备写入数据
   if (cell_num > 0) {
     char newline = '\n';
 

@@ -75,3 +75,25 @@ RC IntegerType::to_string(const Value &val, string &result) const
   result = ss.str();
   return RC::SUCCESS;
 }
+
+RC IntegerType::cast_to(const Value &val, AttrType type, Value &result) const
+{
+  switch (type) {
+    case AttrType::FLOATS: {
+      result.set_float(val.value_.int_value_);
+      return RC::SUCCESS;
+    }break;
+    default: return RC::UNIMPLEMENTED;
+  }
+  return RC::SUCCESS;
+}
+
+int IntegerType::cast_cost(AttrType type) 
+{
+   if(type == AttrType::INTS){
+      return 0;
+   }else if (type == AttrType::FLOATS){
+      return 1;
+   }
+   return INT32_MAX;
+}

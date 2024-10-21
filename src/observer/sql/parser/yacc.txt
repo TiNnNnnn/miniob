@@ -1,0 +1,158 @@
+    rel_attr comp_op value
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_attr = 0;
+      $$->right_value = *$3;
+      $$->comp = $2;
+
+      delete $1;
+      delete $3;
+    }
+    | value comp_op value 
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 0;
+      $$->left_value = *$1;
+      $$->right_is_attr = 0;
+      $$->right_value = *$3;
+      $$->comp = $2;
+
+      delete $1;
+      delete $3;
+    }
+    | rel_attr comp_op rel_attr
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_attr = 1;
+      $$->right_attr = *$3;
+      $$->comp = $2;
+
+      delete $1;
+      delete $3;
+    }
+    | value comp_op rel_attr
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 0;
+      $$->left_value = *$1;
+      $$->right_is_attr = 1;
+      $$->right_attr = *$3;
+      $$->comp = $2;
+
+      delete $1;
+      delete $3;
+    }
+    | rel_attr LIKE value  //SELECT * FROM employees WHERE name LIKE 'J%';
+    {
+        $$ = new ConditionSqlNode;
+        $$->left_is_attr = 1;
+        $$->left_attr = *$1;
+        $$->right_is_attr = 0;
+        $$->right_is_like = 1;
+        $$->right_value = *$3;
+        $$->comp = LIKE_OP;
+
+        delete $1;
+        delete $3;
+    }
+    | rel_attr comp_op expression
+    {
+        $$ = new ConditionSqlNode;
+        $$->left_is_attr = 1;
+        $$->left_is_expr = 0;
+        $$->left_attr = *$1;
+
+        $$->right_is_attr = 0;
+        $$->right_is_like = 0;
+        $$->right_is_expr = 1;
+        $$->right_expr = *$3;
+        $$->comp = $2;
+
+        delete $1;
+        delete $3;
+    }
+    | expression comp_op rel_attr 
+    {
+        $$ = new ConditionSqlNode;
+        $$->left_is_attr = 0;
+        $$->left_is_expr = 1;
+        $$->left_expr = *$1;
+        
+        $$->right_is_attr = 1;
+        $$->right_is_like = 0;
+        $$->right_is_expr = 0;
+        $$->right_attr = *$3;
+        $$->comp = $2;
+
+        delete $1;
+        delete $3;
+    }
+    | value comp_op expression
+    {
+        $$ = new ConditionSqlNode;
+        $$->left_is_attr = 0;
+        $$->left_is_expr = 0;
+        $$->left_value = *$1;
+        
+        $$->right_is_attr = 0;
+        $$->right_is_like = 0;
+        $$->right_is_expr = 1;
+        $$->right_expr = *$3;
+        $$->comp = $2;
+
+        delete $1;
+        delete $3;
+    }
+    | expression comp_op value
+    {
+        $$ = new ConditionSqlNode;
+        $$->left_is_attr = 0;
+        $$->left_is_expr = 1;
+        $$->left_expr = *$1;
+        
+        $$->right_is_attr = 0;
+        $$->right_is_like = 0;
+        $$->right_is_expr = 0;
+        $$->right_value = *$3;
+        $$->comp = $2;
+
+        delete $1;
+        delete $3;
+    }
+
+    /*[\-]?{DIGIT}+                           yylval->number=atoi(yytext); RETURN_TOKEN(NUMBER);*/
+/*[\-]?{DIGIT}+{DOT}{DIGIT}+              yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);*/
+
+ INSERT INTO ID VALUES LBRACE value value_list RBRACE 
+    {
+      $$ = new ParsedSqlNode(SCF_INSERT);
+      $$->insertion.relation_name = $3;
+      if ($7 != nullptr) {
+        $$->insertion.values.swap(*$7);
+        delete $7;
+      }
+      $$->insertion.values.emplace_back(*$6);
+      std::reverse($$->insertion.values.begin(), $$->insertion.values.end());
+      delete $6;
+      free($3);
+    }
+
+value_list:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | COMMA value value_list  { 
+      if ($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<Value>;
+      }
+      $$->emplace_back(*$2);
+      delete $2;
+    } 
+    ;

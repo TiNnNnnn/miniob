@@ -11,17 +11,18 @@ See the Mulan PSL v2 for more details. */
 //
 // Created by Wangyunlai on 2022/5/22.
 //
-
+#include <string>
 #include "sql/stmt/insert_stmt.h"
 #include "common/log/log.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include "common/type/date_type.h"
 
 InsertStmt::InsertStmt(Table *table, const Value *values, int value_amount)
     : table_(table), values_(values), value_amount_(value_amount)
 {}
 
-RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
+RC InsertStmt::create(Db *db, InsertSqlNode &inserts, Stmt *&stmt)
 {
   const char *table_name = inserts.relation_name.c_str();
   if (nullptr == db || nullptr == table_name || inserts.values.empty()) {
@@ -37,7 +38,7 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
-  // check the fields number
+  // check the fields number 
   const Value     *values     = inserts.values.data();
   const int        value_num  = static_cast<int>(inserts.values.size());
   const TableMeta &table_meta = table->table_meta();
@@ -47,6 +48,21 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     return RC::SCHEMA_FIELD_MISSING;
   }
 
+  //如果有Date类型，检查当前attr是否合法
+  int idx = 0;
+  for(auto& meta : *table_meta.field_metas()){
+      if(meta.type() == AttrType::DATE){
+          DateType data;
+          Value v;
+          v.set_type(AttrType::DATE);
+          auto rc = data.set_value_from_str(v,inserts.values[idx].to_string());
+          if(rc != RC::SUCCESS){
+            return rc;
+          }
+          inserts.values[idx] = v;
+      }
+      ++idx;
+  }
   // everything alright
   stmt = new InsertStmt(table, values, value_num);
   return RC::SUCCESS;

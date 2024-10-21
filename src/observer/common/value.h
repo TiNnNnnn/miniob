@@ -18,6 +18,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/memory.h"
 #include "common/type/attr_type.h"
 #include "common/type/data_type.h"
+#include "common/type/date_type.h"
+#include "common/type/vector_type.h"
 
 /**
  * @brief 属性的值
@@ -34,6 +36,8 @@ public:
   friend class FloatType;
   friend class BooleanType;
   friend class CharType;
+  friend class DateType;
+  friend class Vectortype;
 
   Value() = default;
 
@@ -45,6 +49,7 @@ public:
   explicit Value(float val);
   explicit Value(bool val);
   explicit Value(const char *s, int len = 0);
+  explicit Value(const float* x,int dim = 0);
 
   Value(const Value &other);
   Value(Value &&other);
@@ -90,6 +95,7 @@ public:
   void set_value(const Value &value);
   void set_boolean(bool val);
 
+
   string to_string() const;
 
   int compare(const Value &other) const;
@@ -106,6 +112,7 @@ public:
    */
   int    get_int() const;
   float  get_float() const;
+  float* get_vector() const;
   string get_string() const;
   bool   get_boolean() const;
 
@@ -113,7 +120,10 @@ private:
   void set_int(int val);
   void set_float(float val);
   void set_string(const char *s, int len = 0);
+  void set_vector(const float *s,int len = 0);
   void set_string_from_other(const Value &other);
+  void set_vector_from_other(const Value &other);
+  void set_date(const char *s,int len = 0);
 
 private:
   AttrType attr_type_ = AttrType::UNDEFINED;
@@ -125,6 +135,7 @@ private:
     float   float_value_;
     bool    bool_value_;
     char   *pointer_value_;
+    float  *pointer_vector_;
   } value_ = {.int_value_ = 0};
 
   /// 是否申请并占有内存, 目前对于 CHARS 类型 own_data_ 为true, 其余类型 own_data_ 为false

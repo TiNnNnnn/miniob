@@ -60,6 +60,14 @@ public:
    * @param base_dir 表所在的文件夹，表记录数据文件、索引数据文件存放位置
    */
   RC open(Db *db, const char *meta_file, const char *base_dir);
+  /**
+   * 关闭一个表
+   */
+  //RC close(Db *db,const char *meta_file,const char *base_dir);
+  /**
+   * 删除一个表
+   */
+  RC destory(Db *db, int32_t table_id,const char *base_dir);
 
   /**
    * @brief 根据给定的字段生成一个记录/行
@@ -76,6 +84,7 @@ public:
    * @param record[in/out] 传入的数据包含具体的数据，插入成功会通过此字段返回RID
    */
   RC insert_record(Record &record);
+  RC update_record(Record &record,std::string attr_name,const Value& value);
   RC delete_record(const Record &record);
   RC delete_record(const RID &rid);
   RC get_record(const RID &rid, Record &record);

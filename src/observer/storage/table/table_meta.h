@@ -74,7 +74,7 @@ public:
 protected:
   int32_t                table_id_ = -1;
   std::string            name_;
-  std::vector<FieldMeta> trx_fields_;
+  std::vector<FieldMeta> trx_fields_; //字段修改事务列表
   std::vector<FieldMeta> fields_;  // 包含sys_fields
   std::vector<IndexMeta> indexes_;
   StorageFormat          storage_format_;

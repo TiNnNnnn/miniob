@@ -32,7 +32,7 @@ using namespace common;
 RC OptimizeStage::handle_request(SQLStageEvent *sql_event)
 {
   unique_ptr<LogicalOperator> logical_operator;
-
+  //生成初始logical plan
   RC rc = create_logical_plan(sql_event, logical_operator);
   if (rc != RC::SUCCESS) {
     if (rc != RC::UNIMPLEMENTED) {
@@ -42,13 +42,15 @@ RC OptimizeStage::handle_request(SQLStageEvent *sql_event)
   }
 
   ASSERT(logical_operator, "logical operator is null");
-
+  
+  //规则重写阶段
   rc = rewrite(logical_operator);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to rewrite plan. rc=%s", strrc(rc));
     return rc;
   }
 
+  //优化阶段
   rc = optimize(logical_operator);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to optimize plan. rc=%s", strrc(rc));

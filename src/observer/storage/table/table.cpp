@@ -14,6 +14,8 @@ See the Mulan PSL v2 for more details. */
 
 #include <limits.h>
 #include <string.h>
+#include <cstdio>
+
 
 #include "common/defs.h"
 #include "common/lang/string.h"
@@ -30,6 +32,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/record/record_manager.h"
 #include "storage/table/table.h"
 #include "storage/trx/trx.h"
+
 
 Table::~Table()
 {
@@ -185,6 +188,55 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
   return rc;
 }
 
+  /**
+   * 删除一个表
+   */
+RC Table::destory(Db *db, int32_t table_id,const char *base_dir){
+  RC rc = RC::SUCCESS;
+  auto tb_name = db->find_table(table_id)->name();
+  vector<std::string> idx_names;
+  for(size_t i = 0;i<db->find_table(table_id)->table_meta().index_num();i++){
+      stringstream ss;
+      ss << db->find_table(table_id)->table_meta().index(i)->name();
+      idx_names.push_back(ss.str());
+  }
+  string  meta_file_path = table_meta_file(base_dir,tb_name);
+  string  data_file_path =  table_data_file(base_dir,tb_name);
+
+  //删除元数据文件
+  std::ifstream meta_stream(meta_file_path);
+  if(meta_stream.is_open()){
+      meta_stream.close();
+  }
+  if(std::remove(meta_file_path.c_str())){
+     rc = RC::FILE_REMOVE;
+     return rc;
+  }
+
+  //删除数据文件
+  //ps: buffer中的page需要同步清理,直接调用bpm的close_file即可
+  BufferPoolManager &bpm = db->buffer_pool_manager();
+  bpm.close_file(data_file_path.c_str());
+  if(std::remove(data_file_path.c_str())){
+     rc = RC::FILE_REMOVE;
+     return rc;
+  }
+
+  //删除索引文件
+  for(auto idx_name : idx_names){
+     string idx_file_path = table_index_file(base_dir,tb_name,idx_name.c_str());
+     std::ifstream idx_stream(idx_file_path);
+     if(idx_stream.is_open()){
+      idx_stream.close();
+     }
+     if(std::remove(idx_file_path.c_str())){
+        rc = RC::FILE_REMOVE;
+        return rc;
+     }
+  }
+  return rc;
+}
+
 RC Table::insert_record(Record &record)
 {
   RC rc = RC::SUCCESS;
@@ -300,7 +352,7 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
 {
   size_t       copy_len = field->len();
   const size_t data_len = value.length();
-  if (field->type() == AttrType::CHARS) {
+  if (field->type() == AttrType::CHARS || field->type() == AttrType::DATE) {
     if (copy_len > data_len) {
       copy_len = data_len + 1;
     }
@@ -473,6 +525,32 @@ RC Table::delete_record(const Record &record)
            name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
   }
   rc = record_handler_->delete_record(&record.rid());
+  return rc;
+}
+
+RC Table::update_record(Record &record,std::string attr_name,const Value& value){
+  RC rc = RC::SUCCESS;
+
+  //构建new_record
+  Record new_record = record;
+  for(auto e: *table_meta().field_metas()){
+    if(strcmp(e.name(),attr_name.c_str())==0){
+      new_record.set_field(e.offset(),e.len(), const_cast<char*>(value.data()));
+    }
+  }
+  //update indexs
+  for(Index *index : indexes_){
+    rc = index->delete_entry(record.data(),&record.rid());
+    ASSERT(RC::SUCCESS == rc, 
+           "failed to delete entry from index. table name=%s, index name=%s, rid=%s, rc=%s",
+           name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
+    rc = index->insert_entry(new_record.data(),&new_record.rid());
+    ASSERT(RC::SUCCESS == rc, 
+           "failed to insert entry to index. table name=%s, index name=%s, rid=%s, rc=%s",
+           name(), index->index_meta().name(), new_record.rid().to_string().c_str(), strrc(rc));
+  }
+  //update datas
+  rc = record_handler_->update_record(value.data(),value.length(),&record.rid());
   return rc;
 }
 
