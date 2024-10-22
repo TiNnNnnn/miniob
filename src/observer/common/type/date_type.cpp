@@ -43,7 +43,7 @@ RC DateType::set_value_from_str(Value &val, const std::string &data) const{
     if (!parse_date(data, date_value)) {
       return RC::INVALID_DATE_TYPE; // 日期格式无效
     }
-    val.set_data(data.c_str(),data.length());
+    val.set_data(data.c_str(),data.length()); //实际存储时使用char*
     return RC::SUCCESS;
 }
 

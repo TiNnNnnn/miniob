@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 #include "common/type/date_type.h"
+#include "common/type/vector_type.h"
 
 InsertStmt::InsertStmt(Table *table, const Value *values, int value_amount)
     : table_(table), values_(values), value_amount_(value_amount)
@@ -48,18 +49,29 @@ RC InsertStmt::create(Db *db, InsertSqlNode &inserts, Stmt *&stmt)
     return RC::SCHEMA_FIELD_MISSING;
   }
 
-  //如果有Date类型，检查当前attr是否合法
   int idx = 0;
   for(auto& meta : *table_meta.field_metas()){
+      //如果有Date类型，检查当前attr是否合法,并修改inserts对应value类型
       if(meta.type() == AttrType::DATE){
-          DateType data;
+          DateType date;
           Value v;
           v.set_type(AttrType::DATE);
-          auto rc = data.set_value_from_str(v,inserts.values[idx].to_string());
+          auto rc = date.set_value_from_str(v,inserts.values[idx].to_string());
           if(rc != RC::SUCCESS){
-            return rc;
+            return rc;  
           }
           inserts.values[idx] = v;
+      }
+      //如果有vector类型，检查当前attr是否合法，并修改inserts对应value类型
+      if(meta.type() == AttrType::VECTOR){
+        VectorType vec;
+        Value v;
+        v.set_type(AttrType::VECTOR);
+        auto rc = vec.set_value_from_str(v,inserts.values[idx].to_string());
+        if(rc != RC::SUCCESS){
+            return rc;  
+        }
+        inserts.values[idx] = v;
       }
       ++idx;
   }

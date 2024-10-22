@@ -78,6 +78,7 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(LOG_ENTRY_INVALID)           \
   DEFINE_RC(UNSUPPORTED)                 \
   DEFINE_RC(INVALID_DATE_TYPE)           \
+  DEFINE_RC(INVALID_VEC_TYPE)            \
   DEFINE_RC(DIVIDE_ZERO)
 
 enum class RC

@@ -113,7 +113,10 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         GE
         NE
         LIKE
-        
+        VECTOR
+        L2_DISTANCE
+        COSINE_DISTANCE
+        INNER_DISTANCE
 
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
@@ -137,6 +140,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   int                                        number;
   float                                      floats;
   char *                                     date_string;
+  
 }
 
 %token <number> NUMBER
@@ -144,6 +148,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %token <string> ID
 %token <string> SSS
 %token <date_string> DATE
+
 
 //非终结符
 
@@ -368,6 +373,13 @@ attr_def:
         $$->length = 4;
       }
       free($1);
+    } ID VECTOR LBRACE number RBRACE
+    {
+      $$ = new AttrInfoSqlNode;
+      $$->type = (AttrType)$2;
+      $$->name = $1;
+      $$->length = $4;
+      free($1);
     } 
     ;
 number:
@@ -415,7 +427,7 @@ value_with_negative:
       $$ = new Value((int)$1);
       @$ = @1;
     }
-    |FLOAT { //int 
+    |FLOAT { //float 
       $$ = new Value((float)$1);
       @$ = @1;
     }
@@ -573,6 +585,7 @@ expression:
     | '*' {
       $$ = new StarExpr();
     }
+    | 
     // your code here
     ;
 

@@ -28,7 +28,7 @@ Value::Value(bool val) { set_boolean(val); }
 
 Value::Value(const char *s, int len /*= 0*/) { set_string(s, len); }
 
-Value::Value(const float* x,int dim){ set_vector(x,dim); }
+Value::Value(const char* x,int len){ set_vector(x,len); }
 
 Value::Value(const Value &other)
 {
@@ -36,12 +36,11 @@ Value::Value(const Value &other)
   this->length_    = other.length_;
   this->own_data_  = other.own_data_;
   switch (this->attr_type_) {
+    case AttrType::DATE:
+    case AttrType::VECTOR:
     case AttrType::CHARS: {
       set_string_from_other(other);
     } break;
-    case AttrType::VECTOR:{
-      set_vector_from_other(other);
-    }break;
     default: {
       this->value_ = other.value_;
     } break;
@@ -68,13 +67,11 @@ Value &Value::operator=(const Value &other)
   this->length_    = other.length_;
   this->own_data_  = other.own_data_;
   switch (this->attr_type_) {
+    case AttrType::DATE:
+    case AttrType::VECTOR:
     case AttrType::CHARS: {
       set_string_from_other(other);
     } break;
-    case AttrType::VECTOR:{
-      set_vector_from_other(other);
-    }break;
-
     default: {
       this->value_ = other.value_;
     } break;
@@ -100,15 +97,11 @@ Value &Value::operator=(Value &&other)
 void Value::reset()
 {
   switch (attr_type_) {
+    case AttrType::VECTOR:
     case AttrType::CHARS:
       if (own_data_ && value_.pointer_value_ != nullptr) {
         delete[] value_.pointer_value_;
         value_.pointer_value_ = nullptr;
-      }break;
-    case AttrType::VECTOR:
-      if(own_data_ && value_.pointer_value_ != nullptr) {
-        delete[] value_.pointer_vector_;
-        value_.pointer_vector_ = nullptr;
       }break;
     default: break;
   }
@@ -204,18 +197,25 @@ void Value::set_string(const char *s, int len /*= 0*/)
   }
 }
 
-void Value::set_vector(const float *s,int len)
+void Value::set_vector(const char*s,int len)
 {
     reset();
     attr_type_ = AttrType::VECTOR;
-    if(s == nullptr){
-      value_.pointer_vector_ = nullptr;
-      length_ = 0;
-    }else{
-       value_.pointer_vector_= new float[len];
-       length_ = len;
-       memcpy(value_.pointer_vector_,s,len);
-    }   
+    if (s == nullptr) {
+      value_.pointer_value_ = nullptr;
+      length_               = 0;
+    } else {
+      own_data_ = true;
+      if (len > 0) {
+        len = strnlen(s, len);
+      } else {
+        len = strlen(s);
+      }
+      value_.pointer_value_ = new char[len + 1];
+      length_               = len;
+      memcpy(value_.pointer_value_, s, len);
+      value_.pointer_value_[len] = '\0';
+    }
 }
 
 void Value::set_date(const char *s,int len)
@@ -258,7 +258,7 @@ void Value::set_value(const Value &value)
       set_string(value.get_string().c_str());
     } break;
     case AttrType::VECTOR:{
-      set_vector(value.get_vector(),value.length());
+      set_vector(value.get_vector().c_str());
     }
     default: {
       ASSERT(false, "got an invalid value type");
@@ -268,7 +268,7 @@ void Value::set_value(const Value &value)
 
 void Value::set_string_from_other(const Value &other)
 {
-  ASSERT(attr_type_ == AttrType::CHARS, "attr type is not CHARS");
+  ASSERT(attr_type_ == AttrType::CHARS || attr_type_ == AttrType::VECTOR || attr_type_ == AttrType::DATE , "attr type is not CHARS or VECTOR or DATE");
   if (own_data_ && other.value_.pointer_value_ != nullptr && length_ != 0) {
     this->value_.pointer_value_ = new char[this->length_ + 1];
     memcpy(this->value_.pointer_value_, other.value_.pointer_value_, this->length_);
@@ -276,25 +276,15 @@ void Value::set_string_from_other(const Value &other)
   }
 }
 
-void Value::set_vector_from_other(const Value &other)
-{
-  ASSERT(attr_type_ == AttrType::VECTOR, "attr type is not VECTOR");
-  if (own_data_ && other.value_.pointer_vector_ != nullptr && length_ != 0) {
-    this->value_.pointer_vector_ = new float[this->length_];
-    memcpy(this->value_.pointer_vector_, other.value_.pointer_vector_, this->length_);
-  }
-}
 
 const char *Value::data() const
 {
   switch (attr_type_) {
+    case AttrType::VECTOR:
     case AttrType::CHARS:
     case AttrType::DATE: {
       return value_.pointer_value_;
     } break;
-    case AttrType::VECTOR:{
-      return (const char*) value_.pointer_vector_;
-    }
     default: {
       return (const char *)&value_;
     } break;
@@ -373,16 +363,8 @@ float Value::get_float() const
 string Value::get_string() const { return this->to_string(); }
 
 
-float* Value::get_vector() const {
-  switch(attr_type_){
-    case AttrType::VECTOR:{
-      return value_.pointer_vector_;
-    }break;
-    default: {
-      LOG_WARN("unsupport data type. type=%d", attr_type_);
-      return 0;
-    }
-  }
+string Value::get_vector() const {
+  return this->to_string();
 }
 
 bool Value::get_boolean() const
