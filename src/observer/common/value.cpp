@@ -26,9 +26,9 @@ Value::Value(float val) { set_float(val); }
 
 Value::Value(bool val) { set_boolean(val); }
 
-Value::Value(const char *s, int len /*= 0*/) { set_string(s, len); }
+Value::Value(const char *s, int len) { set_string(s, len); }
 
-Value::Value(const char* x,int len){ set_vector(x,len); }
+//Value::Value(const char* x,int len){ set_vector(x,len);}
 
 Value::Value(const Value &other)
 {
@@ -145,7 +145,19 @@ void Value::set_data(char *data, int length)
       }
     } break;
     case AttrType::VECTOR:{
-      LOG_WARN("unsupport data type: %d", attr_type_);
+      reset();
+      this->set_type(AttrType::VECTOR);
+      if (data == nullptr) {
+        value_.pointer_value_ = nullptr;
+        length_               = 0;
+      } else {
+        own_data_ = true;
+        int len = strlen(data);
+        value_.pointer_value_ = new char[len + 1];
+        length_               = len;
+        memcpy(value_.pointer_value_, data, len);
+        value_.pointer_value_[len] = '\0';
+      }
     } break;
     default: {
       LOG_WARN("unknown data type: %d", attr_type_);

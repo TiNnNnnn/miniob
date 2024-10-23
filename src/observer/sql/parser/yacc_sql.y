@@ -82,6 +82,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         UPDATE
         LBRACE
         RBRACE
+        LBRACKET
+        RBRACKET
         COMMA
         TRX_BEGIN
         TRX_COMMIT
@@ -89,7 +91,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         INT_T
         STRING_T
         FLOAT_T
-        DATE_T 
+        DATE_T
+        VECTOR_T
         HELP
         EXIT
         DOT //QUOTE
@@ -101,11 +104,11 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         SET
         ON
         LOAD
-        DATA
         INFILE
         EXPLAIN
         STORAGE
         FORMAT
+        DATA 
         EQ
         LT
         GT
@@ -113,16 +116,18 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         GE
         NE
         LIKE
-        VECTOR
         L2_DISTANCE
         COSINE_DISTANCE
         INNER_DISTANCE
+        INNER
+        JOIN 
 
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
+//  RelsOrJoinClause *                         join_clause;
   Value *                                    value;
   Value *                                    value_with_negative;
   enum CompOp                                comp;
@@ -148,6 +153,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %token <string> ID
 %token <string> SSS
 %token <date_string> DATE
+%token <string> VECTOR 
 
 
 //非终结符
@@ -168,6 +174,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <condition_list>      condition_list
 %type <string>              storage_format
 %type <relation_list>       rel_list
+// %type <join_clause>         join_clause
 %type <expression>          expression
 %type <expression_calc>     expression_calc
 %type <expression_list>     expression_list
@@ -366,19 +373,21 @@ attr_def:
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
-
       if ($$->type == AttrType::DATE){
         $$->length = 10; //2024-10-18
       } else {
         $$->length = 4;
       }
       free($1);
-    } ID VECTOR LBRACE number RBRACE
+    } 
+    | ID VECTOR_T LBRACE number RBRACE
     {
       $$ = new AttrInfoSqlNode;
-      $$->type = (AttrType)$2;
+      $$->type = AttrType::VECTOR;
       $$->name = $1;
-      $$->length = $4;
+      $$->length = 5* int($4)+1;
+      //$$->length = $4;
+      $$->dim = $4;
       free($1);
     } 
     ;
@@ -445,7 +454,23 @@ value_with_negative:
       $$ = new Value(-(float)$2);
       @$ = @2;
     }
+    | LBRACKET value_with_negative value_list RBRACKET{
+       //将列表类型的vector转化为string进行存储，与普通格式进行统一
+        std::string vec_str;
+        vec_str+='[';
+        vec_str+=$2->to_string();
+        if($3!=nullptr){
+          for (auto it = (*$3).rbegin(); it != (*$3).rend(); ++it) {
+            vec_str.push_back(',');
+            vec_str+=it->to_string();
+          }
+        }
+        vec_str+=']';
+        $$ = new Value(AttrType::VECTOR,vec_str.c_str(),vec_str.size());
+    }
     ;
+
+
 
 value:
     NUMBER { //int 
@@ -461,6 +486,20 @@ value:
       $$ = new Value(tmp);
       free(tmp);
       free($1);
+    }
+    | LBRACKET value_with_negative value_list RBRACKET{
+        //将列表类型的vector转化为string进行存储，与普通格式进行统一
+        std::string vec_str;
+        vec_str+='[';
+        vec_str+=$2->to_string();
+        if($3!=nullptr){
+          for (auto it = (*$3).rbegin(); it != (*$3).rend(); ++it) {
+            vec_str.push_back(',');
+            vec_str+=it->to_string();
+          }
+        }
+        vec_str+=']';
+        $$ = new Value(AttrType::VECTOR,vec_str.c_str(),vec_str.size());
     }
     ;
 storage_format:
@@ -511,7 +550,9 @@ select_stmt:        /*  select 语句的语法解析树*/
       }
 
       if ($4 != nullptr) {
-        $$->selection.relations.swap(*$4);
+        //$$->selection.relations.swap(*$4);
+        $$->selection.relations.swap($4->relations);
+        $$->join_expressions.swap($5->join_expressions);
         delete $4;
       }
 
@@ -585,7 +626,15 @@ expression:
     | '*' {
       $$ = new StarExpr();
     }
-    | 
+    | L2_DISTANCE LBRACE expression COMMA expression RBRACE {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::L2_DISTANCE, $3, $5, sql_string, &@$);
+    }
+    | INNER_DISTANCE LBRACE expression COMMA expression RBRACE {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::INNER_DISTANCE, $3, $5, sql_string, &@$);
+    }
+    | COSINE_DISTANCE LBRACE expression COMMA expression RBRACE {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::COSINE_DISTANCE, $3, $5, sql_string, &@$);
+    }
     // your code here
     ;
 
@@ -629,9 +678,23 @@ rel_attr:
 
 relation:
     ID {
-      $$ = $1;
+      //$$ = $1;
+      $$ = new RelsOrJoinClause;
+      $$->relations.push_back($1);
+    }
+    | relation INNER JOIN relation ON condition_list {
+      $$ = new RelsOrJoinClause;
+      $$->relations.push_back($1);
+      $$->relations.push_back($4);
+      if($6 != nullptr){
+         $$->join_expressions = *$6;
+         free($6);
+      }
+      free($1);
+      free($4);
     }
     ;
+
 rel_list:
     relation {
       $$ = new std::vector<std::string>();
@@ -644,10 +707,9 @@ rel_list:
       } else {
         $$ = new std::vector<std::string>;
       }
-
       $$->insert($$->begin(), $1);
       free($1);
-    }
+    } 
     ;
 
 where:

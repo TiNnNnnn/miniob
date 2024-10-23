@@ -109,14 +109,17 @@ RC VectorType::negative(const Value &val, Value &result) const {
 
 RC VectorType::l2_distance(const Value &left, const Value&right,Value &result) const{
 
+  return RC::SUCCESS;
 }
 
 RC VectorType::cosine_distance(const Value &left,const Value& right,Value &result)const{
 
+  return RC::SUCCESS;
 }
 
 RC VectorType::inner_distance(const Value &left,const Value&right,Value &result) const{
-
+  
+  return RC::SUCCESS;
 }
 
 RC VectorType::set_value_from_str(Value &val, const string &data) const {
@@ -173,7 +176,7 @@ bool VectorType::parse_vector(const std::string &vec_str, float * &x, int& dim) 
       item.erase(item.find_last_not_of(' ') + 1);
       
       // 检查是否是合法的数字
-      if (item.empty() || !isdigit(item[0]) && item[0] != '-' && item[0] != '.') {
+      if (item.empty() || (!isdigit(item[0]) && item[0] != '-' && item[0] != '.')) {
         return false;  // 非法字符
       }
 

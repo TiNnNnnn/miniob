@@ -156,3 +156,41 @@ value_list:
       delete $2;
     } 
     ;
+
+join_clause: 
+  relation INNER JOIN relation{
+    $$ = new RelsOrJoinClause;
+    $$->relations.push_back($1);
+    $$->relations.push_back($4);
+
+    free($1);
+    free($4);
+  }
+  | relation INNER JOIN relation ON condition_list {
+    $$ = new RelsOrJoinClause;
+    $$->relations.push_back($1);
+    $$->relations.push_back($4);  
+    $$->join_expressions = *$6;
+    free($1);
+    free($4);
+    free($6);
+  }
+  | join_clause INNER JOIN relation ON condition_list {
+    $$ = new RelsOrJoinClause;
+    $$->join_expressions = *$6;
+    $$->relations.push_back($1);
+    $$->relations.push_back($4); 
+
+    for(auto r : $1->relations){
+      $$->relations.push_back(r);
+    }
+
+    for(auto j : $1->join_expressions){
+      $$->join_expressions.push_back(j);
+    }
+ 
+    free($1);
+    free($4);
+    free($6);
+  }
+  ;

@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/type/char_type.h"
 #include "common/value.h"
+#include "common/type/vector_type.h"
 
 int CharType::compare(const Value &left, const Value &right) const
 {
@@ -29,6 +30,10 @@ RC CharType::set_value_from_str(Value &val, const string &data) const
 RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
 {
   switch (type) {
+    case AttrType::VECTOR: {
+      result = val;
+      result.set_type(AttrType::VECTOR);
+    }break;
     default: return RC::UNIMPLEMENTED;
   }
   return RC::SUCCESS;
@@ -38,6 +43,11 @@ int CharType::cast_cost(AttrType type)
 {
   if (type == AttrType::CHARS) {
     return 0;
+  }else if(type == AttrType::VECTOR) {
+    /*
+      目前底层通过char*存储vector,因此在select时需要将char*类型转化为vector去进行计算&比较
+    */
+    return 1;  
   }
   return INT32_MAX;
 }

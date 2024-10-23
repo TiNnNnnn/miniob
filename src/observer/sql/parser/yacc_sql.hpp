@@ -67,43 +67,52 @@ extern int yydebug;
     UPDATE = 273,
     LBRACE = 274,
     RBRACE = 275,
-    COMMA = 276,
-    TRX_BEGIN = 277,
-    TRX_COMMIT = 278,
-    TRX_ROLLBACK = 279,
-    INT_T = 280,
-    STRING_T = 281,
-    FLOAT_T = 282,
-    DATE_T = 283,
-    HELP = 284,
-    EXIT = 285,
-    DOT = 286,
-    INTO = 287,
-    VALUES = 288,
-    FROM = 289,
-    WHERE = 290,
-    AND = 291,
-    SET = 292,
-    ON = 293,
-    LOAD = 294,
-    DATA = 295,
-    INFILE = 296,
-    EXPLAIN = 297,
-    STORAGE = 298,
-    FORMAT = 299,
-    EQ = 300,
-    LT = 301,
-    GT = 302,
-    LE = 303,
-    GE = 304,
-    NE = 305,
-    LIKE = 306,
-    NUMBER = 307,
-    FLOAT = 308,
-    ID = 309,
-    SSS = 310,
-    DATE = 311,
-    UMINUS = 312
+    LBRACKET = 276,
+    RBRACKET = 277,
+    COMMA = 278,
+    TRX_BEGIN = 279,
+    TRX_COMMIT = 280,
+    TRX_ROLLBACK = 281,
+    INT_T = 282,
+    STRING_T = 283,
+    FLOAT_T = 284,
+    DATE_T = 285,
+    VECTOR_T = 286,
+    HELP = 287,
+    EXIT = 288,
+    DOT = 289,
+    INTO = 290,
+    VALUES = 291,
+    FROM = 292,
+    WHERE = 293,
+    AND = 294,
+    SET = 295,
+    ON = 296,
+    LOAD = 297,
+    INFILE = 298,
+    EXPLAIN = 299,
+    STORAGE = 300,
+    FORMAT = 301,
+    DATA = 302,
+    EQ = 303,
+    LT = 304,
+    GT = 305,
+    LE = 306,
+    GE = 307,
+    NE = 308,
+    LIKE = 309,
+    L2_DISTANCE = 310,
+    COSINE_DISTANCE = 311,
+    INNER_DISTANCE = 312,
+    INNER = 313,
+    JOIN = 314,
+    NUMBER = 315,
+    FLOAT = 316,
+    ID = 317,
+    SSS = 318,
+    DATE = 319,
+    VECTOR = 320,
+    UMINUS = 321
   };
 #endif
 
@@ -111,10 +120,11 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 120 "yacc_sql.y"
+#line 127 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
+//  RelsOrJoinClause *                         join_clause;
   Value *                                    value;
   Value *                                    value_with_negative;
   enum CompOp                                comp;
@@ -132,8 +142,9 @@ union YYSTYPE
   int                                        number;
   float                                      floats;
   char *                                     date_string;
+  
 
-#line 137 "yacc_sql.hpp"
+#line 148 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

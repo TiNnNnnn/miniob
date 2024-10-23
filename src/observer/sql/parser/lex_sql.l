@@ -121,7 +121,10 @@ STORAGE                                 RETURN_TOKEN(STORAGE);
 FORMAT                                  RETURN_TOKEN(FORMAT);
 LIKE                                    RETURN_TOKEN(LIKE);
 
-VECTOR                                  RETURN_TOKEN(VECTOR);
+JOIN                                    RETURN_TOKEN(JOIN);
+INNER                                   RETUN_TOKEN(INNER)
+
+VECTOR                                  RETURN_TOKEN(VECTOR_T);
 L2_DISTANCE                             RETURN_TOKEN(L2_DISTANCE);
 COSINE_DISTANCE                         RETURN_TOKEN(COSINE_DISTANCE);
 INNER_DISTANCE                          RETURN_TOKEN(INNER_DISTANCE);
@@ -129,6 +132,8 @@ INNER_DISTANCE                          RETURN_TOKEN(INNER_DISTANCE);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);
+"["                                     RETURN_TOKEN(LBRACKET);
+"]"                                     RETURN_TOKEN(RBRACKET); 
 
 
 ","                                     RETURN_TOKEN(COMMA);

@@ -30,4 +30,5 @@ public:
   LogicalOperatorType type() const override { return LogicalOperatorType::JOIN; }
 
 private:
+  
 };

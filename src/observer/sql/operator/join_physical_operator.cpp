@@ -36,12 +36,18 @@ RC NestedLoopJoinPhysicalOperator::open(Trx *trx)
 
 RC NestedLoopJoinPhysicalOperator::next()
 {
+  //开始遍历，需要找到下一个left_tuple(即第一个left tuple)
   bool left_need_step = (left_tuple_ == nullptr);
   RC   rc             = RC::SUCCESS;
+  //right已经完成一次遍历，left需要迭代到下一个tuple
   if (round_done_) {
     left_need_step = true;
   } else {
     rc = right_next();
+
+    //join condition filter
+    
+
     if (rc != RC::SUCCESS) {
       if (rc == RC::RECORD_EOF) {
         left_need_step = true;

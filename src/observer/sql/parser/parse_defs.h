@@ -72,16 +72,16 @@ struct ConditionSqlNode
   CompOp         comp;           ///< comparison operator
 
 
-  int            right_is_attr;  ///< TRUE if right-hand side is an attribute
+  int            right_is_attr = 0;  ///< TRUE if right-hand side is an attribute
                                  ///< 1时，操作符右边是属性名，0时，是属性值
   RelAttrSqlNode right_attr;     ///< right-hand side attribute if right_is_attr = TRUE 右边的属性
   Value          right_value;    ///< right-hand side value if right_is_attr = FALSE
   //LIKE
-  int right_is_like; /// < TRUE if right-hand side is an attribute
+  int right_is_like = 0; /// < TRUE if right-hand side is an attribute
                      ///< 1时，操作符右边是like expression，0时，是其他
 
-  int left_is_expr;
-  int right_is_expr;
+  int left_is_expr = 0;
+  int right_is_expr = 0;
 
   Expression* left_expr;
   Expression* right_expr;
@@ -102,8 +102,18 @@ struct SelectSqlNode
 {
   std::vector<std::unique_ptr<Expression>> expressions;  ///< 查询的表达式
   std::vector<std::string>                 relations;    ///< 查询的表
+  std::vector<ConditionSqlNode> join_expressions;          ///< ON之后的连接条件
   std::vector<ConditionSqlNode>            conditions;   ///< 查询条件，使用AND串联起来多个条件
   std::vector<std::unique_ptr<Expression>> group_by;     ///< group by clause
+};
+
+/*
+  for relation in yacc_sql.y
+*/
+struct RelsOrJoinClause
+{
+  std::vector<std::string> relations;
+  std::vector<ConditionSqlNode> join_expressions;
 };
 
 /**
@@ -158,6 +168,7 @@ struct AttrInfoSqlNode
   AttrType    type;    ///< Type of attribute
   std::string name;    ///< Attribute name
   size_t      length;  ///< Length of attribute
+  size_t      dim = 0;
 };
 
 /**

@@ -43,13 +43,12 @@ public:
 
   ~Value() { reset(); }
 
-  Value(AttrType attr_type, char *data, int length = 4) : attr_type_(attr_type) { this->set_data(data, length); }
+  Value(AttrType attr_type, const char *data, int length = 4) : attr_type_(attr_type) { this->set_data(data, length); }
 
   explicit Value(int val);
   explicit Value(float val);
   explicit Value(bool val);
   explicit Value(const char *s, int len = 0);
-  explicit Value(const float* x,int dim);
 
   Value(const Value &other);
   Value(Value &&other);
@@ -84,10 +83,23 @@ public:
     return DataType::type_instance(result.attr_type())->negative(value, result);
   }
 
+  static RC l2_distance(const Value &left, const Value&right,Value &result){
+    return DataType::type_instance(result.attr_type())->l2_distance(left,right,result);
+  }
+
+  static RC cosine_distance(const Value &left,const Value& right,Value &result){
+    return DataType::type_instance(result.attr_type())->cosine_distance(left,right,result);
+  }
+
+  static RC inner_distance(const Value &left,const Value&right,Value &result) {
+    return DataType::type_instance(result.attr_type())->inner_distance(left,right,result);
+  }
+
   static RC cast_to(const Value &value, AttrType to_type, Value &result)
   {
     return DataType::type_instance(value.attr_type())->cast_to(value, to_type, result);
   }
+
 
   void set_type(AttrType type) { this->attr_type_ = type; }
   void set_data(char *data, int length);
@@ -105,7 +117,7 @@ public:
   int      length() const { return length_; }
   AttrType attr_type() const { return attr_type_; }
 
-public:
+public: 
   /**
    * 获取对应的值
    * 如果当前的类型与期望获取的类型不符，就会执行转换操作

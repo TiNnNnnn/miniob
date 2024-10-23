@@ -355,12 +355,12 @@ AttrType ArithmeticExpr::value_type() const
   if (!right_) {                         
     return left_->value_type();
   }
-
   if (left_->value_type() == AttrType::INTS && right_->value_type() == AttrType::INTS &&
       arithmetic_type_ != Type::DIV) {
     return AttrType::INTS;
+  }else if(left_->value_type() == AttrType::VECTOR || right_->value_type() == AttrType::CHARS){
+    return AttrType::VECTOR;
   }
-
   return AttrType::FLOATS;
 }
 
@@ -370,6 +370,10 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
 
   const AttrType target_type = value_type();
   value.set_type(target_type);
+
+  if(left_value.attr_type() == AttrType::VECTOR && right_value.attr_type() == AttrType::CHARS){
+    //right_value.set_type(AttrType::VECTOR);
+  }
 
   switch (arithmetic_type_) {
     case Type::ADD: {
@@ -396,6 +400,17 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
       Value::negative(left_value, value);
     } break;
 
+    case Type::L2_DISTANCE:{
+      Value::l2_distance(left_value,right_value,value);
+    }break;
+
+    case Type::INNER_DISTANCE:{
+      Value::inner_distance(left_value,right_value,value);
+    }break;
+
+    case Type::COSINE_DISTANCE:{
+      Value::cosine_distance(left_value,right_value,value);
+    }break;
     default: {
       rc = RC::INTERNAL;
       LOG_WARN("unsupported arithmetic type. %d", arithmetic_type_);
@@ -498,6 +513,13 @@ RC ArithmeticExpr::get_value(const Tuple &tuple, Value &value) const
       return rc;
     }
   }
+
+  if(right_ && left_value.attr_type()==AttrType::VECTOR && right_value.attr_type()==AttrType::CHARS){
+    right_value.set_type(AttrType::VECTOR);
+  }else if(right_ && left_value.attr_type() == AttrType::CHARS && right_value.attr_type() == AttrType::VECTOR){
+    left_value.set_type(AttrType::VECTOR);
+  }
+
   return calc_value(left_value, right_value, value);
 }
 
@@ -567,6 +589,12 @@ RC ArithmeticExpr::try_get_value(Value &value) const
       LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
       return rc;
     }
+  }
+
+  if(right_ && left_value.attr_type()==AttrType::VECTOR && right_value.attr_type()==AttrType::CHARS){
+    right_value.set_type(AttrType::VECTOR);
+  }else if(right_ && left_value.attr_type() == AttrType::CHARS && right_value.attr_type() == AttrType::VECTOR){
+    left_value.set_type(AttrType::VECTOR);
   }
 
   return calc_value(left_value, right_value, value);

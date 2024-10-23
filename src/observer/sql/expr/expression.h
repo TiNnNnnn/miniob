@@ -364,6 +364,9 @@ public:
     MUL,
     DIV,
     NEGATIVE,
+    L2_DISTANCE,
+    INNER_DISTANCE,
+    COSINE_DISTANCE,
   };
 
 public:
