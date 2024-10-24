@@ -16,12 +16,25 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/tuple.h"
 #include "sql/expr/arithmetic_operator.hpp"
 #include <regex>
+#include "expression.h"
 
 using namespace std;
 
 RC FieldExpr::get_value(const Tuple &tuple, Value &value) const
 {
   return tuple.find_cell(TupleCellSpec(table_name(), field_name()), value);
+}
+
+RC FieldExpr::get_value(const std::vector<Tuple*>& tuples,Value &value) const
+{
+    RC rc = RC::SUCCESS;
+    for(const auto &t : tuples){
+      rc = get_value(*t,value);
+      if(rc == RC::SUCCESS){
+        break;
+      }
+    }
+    return rc;
 }
 
 bool FieldExpr::equal(const Expression &other) const
@@ -66,6 +79,12 @@ RC ValueExpr::get_value(const Tuple &tuple, Value &value) const
   return RC::SUCCESS;
 }
 
+RC ValueExpr::get_value(const std::vector<Tuple*>& tuples,Value &value) const 
+{
+  value = value_;
+  return RC::SUCCESS;
+}
+
 RC ValueExpr::get_column(Chunk &chunk, Column &column)
 {
   column.init(value_);
@@ -98,6 +117,19 @@ RC CastExpr::get_value(const Tuple &tuple, Value &result) const
   }
 
   return cast(value, result);
+}
+
+RC CastExpr::get_value(const std::vector<Tuple*>& tuples,Value &result) const 
+{
+  RC rc = RC::SUCCESS;
+  Value value;
+  for(const auto& t : tuples){
+    rc = get_value(*t,value);
+    if(rc == RC::SUCCESS){
+      return cast(value,result);
+    }
+  }
+  return rc;
 }
 
 RC CastExpr::try_get_value(Value &result) const
@@ -208,6 +240,8 @@ RC ComparisonExpr::try_get_value(Value &cell) const
       cell.set_boolean(value);
     }
     return rc;
+  }else if(left_->type() == ExprType::FIELD && right_->type() == ExprType::FIELD){
+
   }
 
   return RC::INVALID_ARGUMENT;
@@ -237,6 +271,43 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
     return rc;
   }
 
+  bool bool_value = false;
+
+  rc = compare_value(left_value, right_value, bool_value);
+  if (rc == RC::SUCCESS) {
+    value.set_boolean(bool_value);
+  }
+  return rc;
+}
+
+RC ComparisonExpr::get_value(const std::vector<Tuple*>& tuples,Value &value) const {
+  Value left_value;
+  Value right_value;
+
+  RC rc = left_->get_value(tuples, left_value);
+  if (rc != RC::SUCCESS) {
+    if(rc == RC::DIVIDE_ZERO){
+      value.set_boolean(false);
+      return RC::SUCCESS;
+    }else if(rc == RC::NOTFOUND){
+      value.set_boolean(true);
+      return RC::SUCCESS;
+    }
+    LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+    return rc;
+  }
+  rc = right_->get_value(tuples, right_value);
+  if (rc != RC::SUCCESS) {
+    if(rc == RC::DIVIDE_ZERO){
+      value.set_boolean(false);
+      return RC::SUCCESS;
+    }else if(rc == RC::NOTFOUND){
+      value.set_boolean(true);
+      return RC::SUCCESS;
+    }
+    LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+    return rc;
+  }
   bool bool_value = false;
 
   rc = compare_value(left_value, right_value, bool_value);
@@ -313,6 +384,32 @@ RC ConjunctionExpr::get_value(const Tuple &tuple, Value &value) const
   Value tmp_value;
   for (const unique_ptr<Expression> &expr : children_) {
     rc = expr->get_value(tuple, tmp_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value by child expression. rc=%s", strrc(rc));
+      return rc;
+    }
+    bool bool_value = tmp_value.get_boolean();
+    if ((conjunction_type_ == Type::AND && !bool_value) || (conjunction_type_ == Type::OR && bool_value)) {
+      value.set_boolean(bool_value);
+      return rc;
+    }
+  }
+
+  bool default_value = (conjunction_type_ == Type::AND);
+  value.set_boolean(default_value);
+  return rc;
+}
+
+RC ConjunctionExpr::get_value(const std::vector<Tuple*>& tuples,Value &value) const{
+  RC rc = RC::SUCCESS;
+  if (children_.empty()) {
+    value.set_boolean(true);
+    return rc;
+  }
+
+  Value tmp_value;
+  for (const unique_ptr<Expression> &expr : children_) {
+    rc = expr->get_value(tuples, tmp_value);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to get value by child expression. rc=%s", strrc(rc));
       return rc;
@@ -523,6 +620,41 @@ RC ArithmeticExpr::get_value(const Tuple &tuple, Value &value) const
   return calc_value(left_value, right_value, value);
 }
 
+RC ArithmeticExpr::get_value(const std::vector<Tuple*>& tuples,Value &value) const{
+  RC rc = RC::SUCCESS;
+
+  Value left_value;
+  Value right_value;
+
+  rc = left_->get_value(tuples, left_value);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  if(right_ == nullptr){ //for negative opr
+      if(arithmetic_type_ == Type::NEGATIVE){
+      }else{
+          LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+          return rc;
+      }
+  }else{
+    rc = right_->get_value(tuples, right_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+
+  if(right_ && left_value.attr_type()==AttrType::VECTOR && right_value.attr_type()==AttrType::CHARS){
+    right_value.set_type(AttrType::VECTOR);
+  }else if(right_ && left_value.attr_type() == AttrType::CHARS && right_value.attr_type() == AttrType::VECTOR){
+    left_value.set_type(AttrType::VECTOR);
+  }
+
+  return calc_value(left_value, right_value, value);
+}
+
 RC ArithmeticExpr::get_column(Chunk &chunk, Column &column)
 {
   RC rc = RC::SUCCESS;
@@ -655,6 +787,19 @@ RC AggregateExpr::get_value(const Tuple &tuple, Value &value) const
 {
   return tuple.find_cell(TupleCellSpec(name()), value);
 }
+
+RC AggregateExpr::get_value(const std::vector<Tuple*>& tuples,Value &value) const
+{
+  RC rc = RC::SUCCESS;
+  for(const auto& t: tuples){
+    rc = get_value(*t,value);
+    if(rc == RC::SUCCESS){
+      return rc;
+    }
+  }
+  return rc;
+}
+
 
 RC AggregateExpr::type_from_string(const char *type_str, AggregateExpr::Type &type)
 {

@@ -61,7 +61,6 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     table_map.insert({table_name, table});
   }
 
-
   // collect query fields in `select` statement
   vector<unique_ptr<Expression>> bound_expressions;
   ExpressionBinder expression_binder(binder_context);
@@ -73,7 +72,6 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       return rc;
     }
   }
-
 
   vector<unique_ptr<Expression>> group_by_expressions;
   for (unique_ptr<Expression> &expression : select_sql.group_by) {
@@ -89,13 +87,16 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     default_table = tables[0];
   }
 
-  //build join conditions
+  //build join conditions and build expression
   FilterStmt *tmp_stmt = new FilterStmt();
   std::vector<FilterUnit*>join_conditions;
   for(size_t i=0;i<select_sql.join_expressions.size();i++){
     FilterUnit *filter_unit = nullptr;
     auto join_cond = select_sql.join_expressions[i];
     auto rc = tmp_stmt->create_filter_unit(db, default_table, &table_map, join_cond , filter_unit);
+    if (rc != RC::SUCCESS){
+      return rc;
+    }
     join_conditions.push_back(filter_unit); 
   }
   delete(tmp_stmt);
@@ -115,7 +116,6 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
 
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
-
   select_stmt->tables_.swap(tables);
   select_stmt->query_expressions_.swap(bound_expressions);
   select_stmt->filter_stmt_ = filter_stmt;
@@ -123,4 +123,5 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->join_conditions_.swap(join_conditions);
   stmt                      = select_stmt;
   return RC::SUCCESS;
+  
 }

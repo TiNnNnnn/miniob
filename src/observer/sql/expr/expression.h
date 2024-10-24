@@ -75,7 +75,13 @@ public:
    * @brief 根据具体的tuple，来计算当前表达式的值。tuple有可能是一个具体某个表的行数据
    */
   virtual RC get_value(const Tuple &tuple, Value &value) const = 0;
+  /**
+   * @brief expression两端来自不同table的tuple
+  */
+  virtual RC get_value(const std::vector<Tuple*>& tuples,Value &value) const {return RC::UNIMPLEMENTED;}
 
+  virtual const char* table_name() const {return nullptr;}
+  
   /**
    * @brief 在没有实际运行的情况下，也就是无法获取tuple的情况下，尝试获取表达式的值
    * @details 有些表达式的值是固定的，比如ValueExpr，这种情况下可以直接获取值
@@ -146,6 +152,7 @@ public:
   AttrType value_type() const override { return AttrType::UNDEFINED; }
 
   RC get_value(const Tuple &tuple, Value &value) const override { return RC::UNIMPLEMENTED; }  // 不需要实现
+  RC get_value(const std::vector<Tuple*>& tuples,Value &value) const override{return RC::UNIMPLEMENTED;}
 
   const char *table_name() const { return table_name_.c_str(); }
 
@@ -166,6 +173,8 @@ public:
   AttrType value_type() const override { return AttrType::UNDEFINED; }
 
   RC get_value(const Tuple &tuple, Value &value) const override { return RC::INTERNAL; }
+  RC get_value(const std::vector<Tuple*>& tuples,Value &value) const override{return RC::UNIMPLEMENTED;}
+
 
   const char *table_name() const { return table_name_.c_str(); }
   const char *field_name() const { return field_name_.c_str(); }
@@ -204,6 +213,7 @@ public:
   RC get_column(Chunk &chunk, Column &column) override;
 
   RC get_value(const Tuple &tuple, Value &value) const override;
+  RC get_value(const std::vector<Tuple*>& tuples,Value &value) const override;
 
 private:
   Field field_;
@@ -224,6 +234,7 @@ public:
   bool equal(const Expression &other) const override;
 
   RC get_value(const Tuple &tuple, Value &value) const override;
+  RC get_value(const std::vector<Tuple*>& tuples,Value &value) const override;
   RC get_column(Chunk &chunk, Column &column) override;
   RC try_get_value(Value &value) const override
   {
@@ -256,6 +267,7 @@ public:
   ExprType type() const override { return ExprType::CAST; }
 
   RC get_value(const Tuple &tuple, Value &value) const override;
+  RC get_value(const std::vector<Tuple*>& tuples,Value &value) const override;
 
   RC try_get_value(Value &value) const override;
 
@@ -283,6 +295,7 @@ public:
 
   ExprType type() const override { return ExprType::COMPARISON; }
   RC       get_value(const Tuple &tuple, Value &value) const override;
+  RC       get_value(const std::vector<Tuple*>& tuples, Value &value) const override;
   AttrType value_type() const override { return AttrType::BOOLEANS; }
   CompOp   comp() const { return comp_; }
 
@@ -339,7 +352,9 @@ public:
 
   ExprType type() const override { return ExprType::CONJUNCTION; }
   AttrType value_type() const override { return AttrType::BOOLEANS; }
+
   RC       get_value(const Tuple &tuple, Value &value) const override;
+  RC       get_value(const std::vector<Tuple*>& tuples,Value &value) const;
 
   Type conjunction_type() const { return conjunction_type_; }
 
@@ -387,6 +402,7 @@ public:
   };
 
   RC get_value(const Tuple &tuple, Value &value) const override;
+  RC get_value(const std::vector<Tuple*>& tuples,Value &value) const override;
 
   RC get_column(Chunk &chunk, Column &column) override;
 
@@ -424,6 +440,7 @@ public:
   std::unique_ptr<Expression> &child() { return child_; }
 
   RC       get_value(const Tuple &tuple, Value &value) const override { return RC::INTERNAL; }
+  RC       get_value(const std::vector<Tuple*>& tuples,Value &value) const override {return RC::INTERNAL;}
   AttrType value_type() const override { return child_->value_type(); }
 
 private:
@@ -456,6 +473,7 @@ public:
   int      value_length() const override { return child_->value_length(); }
 
   RC get_value(const Tuple &tuple, Value &value) const override;
+  RC get_value(const std::vector<Tuple*>& tuples,Value &value) const override;
 
   RC get_column(Chunk &chunk, Column &column) override;
 

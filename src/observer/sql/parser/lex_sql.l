@@ -122,7 +122,7 @@ FORMAT                                  RETURN_TOKEN(FORMAT);
 LIKE                                    RETURN_TOKEN(LIKE);
 
 JOIN                                    RETURN_TOKEN(JOIN);
-INNER                                   RETUN_TOKEN(INNER)
+INNER                                   RETURN_TOKEN(INNER);
 
 VECTOR                                  RETURN_TOKEN(VECTOR_T);
 L2_DISTANCE                             RETURN_TOKEN(L2_DISTANCE);

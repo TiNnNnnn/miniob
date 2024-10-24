@@ -25,7 +25,7 @@ See the Mulan PSL v2 for more details. */
 class NestedLoopJoinPhysicalOperator : public PhysicalOperator
 {
 public:
-  NestedLoopJoinPhysicalOperator();
+  NestedLoopJoinPhysicalOperator(std::unique_ptr<Expression> expr = nullptr);
   virtual ~NestedLoopJoinPhysicalOperator() = default;
 
   PhysicalOperatorType type() const override { return PhysicalOperatorType::NESTED_LOOP_JOIN; }
@@ -35,9 +35,13 @@ public:
   RC     close() override;
   Tuple *current_tuple() override;
 
+  void set_predicates(std::unique_ptr<Expression> &&exprs);
+
 private:
   RC left_next();   //! 左表遍历下一条数据
   RC right_next();  //! 右表遍历下一条数据，如果上一轮结束了就重新开始新的一轮
+
+  RC filter(Tuple &tuple, bool &result);
 
 private:
   Trx *trx_ = nullptr;

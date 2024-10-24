@@ -339,7 +339,17 @@ RC PhysicalPlanGenerator::create_plan(JoinLogicalOperator &join_oper, unique_ptr
     return RC::INTERNAL;
   }
 
-  unique_ptr<PhysicalOperator> join_physical_oper(new NestedLoopJoinPhysicalOperator);
+  //检查是否存在join conditions
+  unique_ptr<Expression> expression;
+  unique_ptr<PhysicalOperator> join_physical_oper;
+
+  if(join_oper.expressions().size()){
+    expression = std::move(join_oper.expressions().front());
+    join_physical_oper = make_unique<NestedLoopJoinPhysicalOperator>(std::move(expression));
+  }else{
+    join_physical_oper = make_unique<NestedLoopJoinPhysicalOperator>();
+  }
+
   for (auto &child_oper : child_opers) {
     unique_ptr<PhysicalOperator> child_physical_oper;
     rc = create(*child_oper, child_physical_oper);

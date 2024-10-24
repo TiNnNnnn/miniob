@@ -127,7 +127,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %union {
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
-//  RelsOrJoinClause *                         join_clause;
+  RelsOrJoinClause *                         rel_or_join;
   Value *                                    value;
   Value *                                    value_with_negative;
   enum CompOp                                comp;
@@ -140,7 +140,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
+  //std::vector<std::string> *                 relation_list;
+  RelsOrJoinClause *                         relation_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -164,7 +165,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <value>               value
 %type <value_with_negative> value_with_negative
 %type <number>              number
-%type <string>              relation
+//%type <string>            relation
+%type <rel_or_join>         relation
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
@@ -552,7 +554,7 @@ select_stmt:        /*  select 语句的语法解析树*/
       if ($4 != nullptr) {
         //$$->selection.relations.swap(*$4);
         $$->selection.relations.swap($4->relations);
-        $$->join_expressions.swap($5->join_expressions);
+        $$->selection.join_expressions.swap($4->join_expressions);
         delete $4;
       }
 
@@ -684,31 +686,57 @@ relation:
     }
     | relation INNER JOIN relation ON condition_list {
       $$ = new RelsOrJoinClause;
-      $$->relations.push_back($1);
-      $$->relations.push_back($4);
-      if($6 != nullptr){
-         $$->join_expressions = *$6;
-         free($6);
+
+      for(auto &r: $1->relations){
+        $$->relations.push_back(r);
       }
-      free($1);
-      free($4);
+      for(auto &r: $4->relations){
+        $$->relations.push_back(r);
+      }
+      for(auto &c: $1->join_expressions){
+        $$->join_expressions.push_back(c);
+      }
+      if($6 != nullptr){
+         for(auto &c: *$6){
+            $$->join_expressions.push_back(c);
+         }
+         delete($6);
+      }
+      delete($1);
+      delete($4);
     }
     ;
 
 rel_list:
     relation {
-      $$ = new std::vector<std::string>();
-      $$->push_back($1);
-      free($1);
+      //$$ = new std::vector<std::string>();
+      //$$->push_back($1);
+
+      $$ = new RelsOrJoinClause;
+      for(auto &r: $1->relations){
+        $$->relations.push_back(r);
+      }
+      for(auto &c: $1->join_expressions){
+        $$->join_expressions.push_back(c);
+      }
+      delete($1);
     }
     | relation COMMA rel_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<std::string>;
+        //$$ = new std::vector<std::string>;
+        $$ = new RelsOrJoinClause;
       }
-      $$->insert($$->begin(), $1);
-      free($1);
+      //$$->insert($$->begin(), $1);
+      for(auto &r: $1->relations){
+        $$->relations.insert($$->relations.begin(),r);
+      }
+      for(auto &c: $1->join_expressions){
+        $$->join_expressions.insert($$->join_expressions.begin(),c);
+        //$$->join_expressions.push_back(c);
+      }
+      delete($1);
     } 
     ;
 

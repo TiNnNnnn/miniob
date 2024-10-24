@@ -124,7 +124,7 @@ union YYSTYPE
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
-//  RelsOrJoinClause *                         join_clause;
+  RelsOrJoinClause *                         rel_or_join;
   Value *                                    value;
   Value *                                    value_with_negative;
   enum CompOp                                comp;
@@ -137,14 +137,15 @@ union YYSTYPE
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
+  //std::vector<std::string> *                 relation_list;
+  RelsOrJoinClause *                         relation_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
   char *                                     date_string;
   
 
-#line 148 "yacc_sql.hpp"
+#line 149 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

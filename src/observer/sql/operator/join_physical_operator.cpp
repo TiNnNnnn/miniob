@@ -14,7 +14,10 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/join_physical_operator.h"
 
-NestedLoopJoinPhysicalOperator::NestedLoopJoinPhysicalOperator() {}
+NestedLoopJoinPhysicalOperator::NestedLoopJoinPhysicalOperator(std::unique_ptr<Expression> expr) {
+  if(expr)
+    expression_ = std::move(expr);
+}
 
 RC NestedLoopJoinPhysicalOperator::open(Trx *trx)
 {
@@ -36,38 +39,106 @@ RC NestedLoopJoinPhysicalOperator::open(Trx *trx)
 
 RC NestedLoopJoinPhysicalOperator::next()
 {
-  //开始遍历，需要找到下一个left_tuple(即第一个left tuple)
-  bool left_need_step = (left_tuple_ == nullptr);
-  RC   rc             = RC::SUCCESS;
-  //right已经完成一次遍历，left需要迭代到下一个tuple
-  if (round_done_) {
-    left_need_step = true;
-  } else {
-    rc = right_next();
 
-    //join condition filter
-    
+  // //开始遍历，需要找到下一个left_tuple(即第一个left tuple)
+  // bool left_need_step = (left_tuple_ == nullptr);
+  // RC   rc             = RC::SUCCESS;
+  // //right已经完成一次遍历，left需要迭代到下一个tuple
+  // if (round_done_) {
+  //   left_need_step = true;
+  // } else {
+  //   rc = right_next();
 
-    if (rc != RC::SUCCESS) {
-      if (rc == RC::RECORD_EOF) {
-        left_need_step = true;
-      } else {
+  //   if (rc != RC::SUCCESS) {
+  //     if (rc == RC::RECORD_EOF) {
+  //       left_need_step = true;
+  //     } else {
+  //       return rc;
+  //     }
+  //   } else {
+  //     return rc;  // got one tuple from right
+  //   }
+  // }
+
+  // if (left_need_step) {
+  //   rc = left_next();
+  //   if (rc != RC::SUCCESS) {
+  //     return rc;
+  //   }
+  // }
+  // rc = right_next();
+  // return rc;
+
+
+  while(1){
+    bool left_need_step = (left_tuple_ == nullptr);
+    RC rc = RC::SUCCESS;
+    if(round_done_){
+      left_need_step = true;
+    }else{
+      //右边没有到达END,获取new right_tuple
+      rc = right_next();
+      if (rc != RC::SUCCESS) {
+        if (rc == RC::RECORD_EOF) {
+          left_need_step = true;
+        } else {
+          return rc;
+        }
+      }
+      //判断left_tupe_+ new right_tuple_是否符合join_conditions
+      //如果left_need_step = true，说明right已经到末尾,不是new right tuple
+      if(!left_need_step){
+        if(!expression_)return rc;
+
+        Value value;
+        std::vector<Tuple*>tuple_list;
+        tuple_list.push_back(left_tuple_);
+        tuple_list.push_back(right_tuple_);
+
+        rc = expression_->get_value(tuple_list,value);
+        if (rc != RC::SUCCESS) {
+            return rc;
+        }
+
+        if(value.get_boolean()){
+          return rc; 
+        }else{
+          continue;
+        } 
+      }
+    }
+
+    if(left_need_step){
+      rc = left_next();
+      if (rc != RC::SUCCESS) {
+        //left 获取失败，说明已经结束迭代，返回RC_EOF
         return rc;
       }
-    } else {
-      return rc;  // got one tuple from right
     }
-  }
 
-  if (left_need_step) {
-    rc = left_next();
-    if (rc != RC::SUCCESS) {
+
+    rc = right_next();
+    if(rc == RC::RECORD_EOF){
+      continue;
+    }
+    
+    if(!expression_){
       return rc;
     }
-  }
 
-  rc = right_next();
-  return rc;
+    Value value;
+    std::vector<Tuple*>tuple_list;
+    tuple_list.push_back(left_tuple_);
+    tuple_list.push_back(right_tuple_);
+
+    rc = expression_->get_value(tuple_list,value);
+    if (rc != RC::SUCCESS) {
+          return rc;
+    }
+    if(value.get_boolean()){
+        return rc; 
+    }
+  }
 }
 
 RC NestedLoopJoinPhysicalOperator::close()
@@ -121,7 +192,6 @@ RC NestedLoopJoinPhysicalOperator::right_next()
       return rc;
     }
     right_closed_ = false;
-
     round_done_ = false;
   }
 
@@ -134,6 +204,9 @@ RC NestedLoopJoinPhysicalOperator::right_next()
   }
 
   right_tuple_ = right_->current_tuple();
+
+  //TODO: 目前expression的 get_value只能传一个tuple,针对单表没有问题，但是多表情况下存在问题，
+
   joined_tuple_.set_right(right_tuple_);
   return rc;
 }

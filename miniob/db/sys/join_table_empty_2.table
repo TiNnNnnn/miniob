@@ -11,15 +11,15 @@
 		},
 		{
 			"FIELD_id" : 1,
-			"len" : 16,
-			"name" : "embedding",
+			"len" : 4,
+			"name" : "num_empty_2",
 			"offset" : 4,
-			"type" : "vector",
+			"type" : "ints",
 			"visible" : true
 		}
 	],
 	"indexes" : null,
 	"storage_format" : 1,
-	"table_id" : 0,
-	"table_name" : "items"
+	"table_id" : 5,
+	"table_name" : "join_table_empty_2"
 }
